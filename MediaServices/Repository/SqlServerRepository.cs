@@ -25,6 +25,7 @@ namespace MediaServices.Repository
         {
             //No memory footprint as we know the response size in advance and allocating that much space via pagesize
             var response = new List<Response>(pageSize);
+            
             var shows = _db.Shows.Skip((pageNumber - 1) * pageSize)
                                  .Take(pageSize)
                                  .ToList();
@@ -37,6 +38,7 @@ namespace MediaServices.Repository
                 response.Add(new Response() { ShowId = show.Id, ShowName = show.Name, Persons = persons });
             }
 
+            var memory = GC.GetGeneration(response);
             return response;
         }
 
@@ -65,24 +67,23 @@ namespace MediaServices.Repository
         {
             try
             {
-
+                var shows = await MazeHelper.GetShows();
+                using (var db = new MediaDbContext())
+                {
+                    foreach (var show in shows)
+                    {
+                        if (db.Shows.Find(show.Id) == null)
+                        {
+                            await db.AddAsync(show);
+                            await db.SaveChangesAsync();
+                        }
+                        await MapPerson(show.Id);
+                    }
+                }
             }
             catch (Exception ex)
             {
                 var message = ex.Message;
-            }
-            var shows = await MazeHelper.GetShows();
-            using (var db = new MediaDbContext())
-            {
-                foreach (var show in shows)
-                {
-                    if (db.Shows.Find(show.Id) == null)
-                    {
-                        await db.AddAsync(show);
-                        await db.SaveChangesAsync();
-                    }
-                    await MapPerson(show.Id);
-                }
             }
         }
 
